@@ -1,0 +1,80 @@
+import requests
+from bs4 import BeautifulSoup
+import csv
+import time
+
+# URL of the Amazon product reviews page
+url = 'https://www.amazon.com/product-reviews/B08J65DST5'
+
+# Headers to mimic a browser visit
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
+
+# Function to get the HTML content of a page
+def get_page_content(url):
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.text
+    else:
+        print(f"Failed to retrieve page: {url}")
+        return None
+
+# Function to parse and extract reviews from a page
+def parse_reviews(soup):
+    reviews = []
+    review_divs = soup.find_all('div', {'data-hook': 'review'})
+    
+    if not review_divs:
+        print("No reviews found on this page.")
+    
+    for review_div in review_divs:
+        review = {}
+        title_tag = review_div.find('a', {'data-hook': 'review-title'})
+        rating_tag = review_div.find('i', {'data-hook': 'review-star-rating'})
+        text_tag = review_div.find('span', {'data-hook': 'review-body'})
+        
+        if title_tag and rating_tag and text_tag:
+            review['title'] = title_tag.text.strip()
+            review['rating'] = rating_tag.text.strip().split()[0]
+            review['text'] = text_tag.text.strip()
+            reviews.append(review)
+        else:
+            print("One or more elements missing in a review, skipping...")
+    
+    return reviews
+
+# Function to get the next page URL
+def get_next_page(soup):
+    next_page = soup.find('li', {'class': 'a-last'})
+    if next_page and next_page.find('a'):
+        return 'https://www.amazon.com' + next_page.find('a')['href']
+    return None
+
+# Scraping multiple pages
+def scrape_reviews(url):
+    all_reviews = []
+    while url:
+        print(f'Scraping page: {url}')
+        html = get_page_content(url)
+        if not html:
+            break
+        soup = BeautifulSoup(html, 'html.parser')
+        reviews = parse_reviews(soup)
+        if reviews:
+            all_reviews.extend(reviews)
+        else:
+            print("No reviews found, stopping scraping.")
+            break
+        url = get_next_page(soup)
+        time.sleep(2)  # Adding delay to avoid being blocked
+
+    return all_reviews
+
+# Main function to run the scraper
+if __name__ == "__main__":
+    reviews = scrape_reviews(url)
+    if reviews:
+        print(f'Scraped {len(reviews)} reviews.')
+    else:
+        print("No reviews were scraped.")
